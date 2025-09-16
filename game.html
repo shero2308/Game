@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Pixel Platformer</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: black;
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+      background: linear-gradient(#1e1e2e, #000);
+      image-rendering: pixelated;
+    }
+  </style>
+</head>
+<body>
+  <!-- Music & Sounds -->
+  <audio id="bgMusic" src="music.mp3" loop></audio>
+  <audio id="jumpSound" src="jump.wav"></audio>
+
+  <canvas id="gameCanvas" width="960" height="540"></canvas>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    // --- Audio ---
+    const bgMusic = document.getElementById("bgMusic");
+    const jumpSound = document.getElementById("jumpSound");
+
+    // allow music after first key press (for browsers)
+    window.addEventListener("keydown", () => {
+      bgMusic.volume = 0.3;
+      bgMusic.play();
+    }, { once: true });
+
+    // --- Settings ---
+    const gravity = 0.6;
+    const jumpPower = -18;
+    const moveSpeed = 6;
+
+    // --- Player ---
+    const player = {
+      x: 100,
+      y: canvas.height - 150,
+      width: 32,
+      height: 32,
+      vx: 0,
+      vy: 0,
+      onGround: false,
+      jumpCount: 0,
+      maxJumps: 2
+    };
+
+    // --- Platforms ---
+    let platforms = [
+      { x: 0, y: canvas.height - 40, width: canvas.width, height: 40 }
+    ];
+    platforms.push({ x: 200, y: 400, width: 120, height: 20 });
+    platforms.push({ x: 400, y: 350, width: 120, height: 20 });
+    platforms.push({ x: 650, y: 300, width: 120, height: 20 });
+
+    // --- Coins ---
+    let coins = [
+      { x: 260, y: 360, r: 8, collected: false },
+      { x: 460, y: 310, r: 8, collected: false },
+      { x: 690, y: 260, r: 8, collected: false }
+    ];
+
+    // --- Controls ---
+    const keys = {};
+    document.addEventListener("keydown", e => keys[e.code] = true);
+    document.addEventListener("keyup", e => keys[e.code] = false);
+
+    function jump() {
+      player.vy = jumpPower;
+      player.jumpCount++;
+      jumpSound.currentTime = 0;
+      jumpSound.play();
+    }
+
+    // --- Score ---
+    let score = 0;
+
+    // --- Camera ---
+    let cameraX = 0;
+
+    // --- Game Loop ---
+    function gameLoop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // --- Player movement ---
+      if (keys["ArrowLeft"]) player.vx = -moveSpeed;
+      else if (keys["ArrowRight"]) player.vx = moveSpeed;
+      else player.vx = 0;
+
+      if ((keys["Space"] || keys["ArrowUp"]) && player.jumpCount < player.maxJumps) {
+        jump();
+        keys["Space"] = false;
+        keys["ArrowUp"] = false;
+      }
+
+      // Physics
+      player.vy += gravity;
+      player.x += player.vx;
+      player.y += player.vy;
+
+      // Collision
+      player.onGround = false;
+      for (let p of platforms) {
+        if (player.x < p.x + p.width &&
+            player.x + player.width > p.x &&
+            player.y + player.height <= p.y &&
+            player.y + player.height + player.vy >= p.y) {
+          player.y = p.y - player.height;
+          player.vy = 0;
+          player.onGround = true;
+          player.jumpCount = 0;
+        }
+      }
+
+      // Collect coins
+      for (let c of coins) {
+        if (!c.collected) {
+          let dx = (player.x + player.width / 2) - c.x;
+          let dy = (player.y + player.height / 2) - c.y;
+          if (Math.sqrt(dx * dx + dy * dy) < player.width / 2 + c.r) {
+            c.collected = true;
+            score += 10;
+          }
+        }
+      }
+
+      // Respawn if fall
+      if (player.y > canvas.height) {
+        setTimeout(() => {
+          player.x = 100;
+          player.y = canvas.height - 150;
+          player.vx = 0;
+          player.vy = 0;
+          score = 0;
+          coins.forEach(c => c.collected = false);
+        }, 500);
+      }
+
+      // Camera follows player (clamped so no void)
+      cameraX = Math.max(0, player.x - canvas.width / 2);
+
+      // --- Background stars ---
+      ctx.fillStyle = "white";
+      for (let i = 0; i < 50; i++) {
+        ctx.fillRect(
+          ((i * 200 - cameraX * 0.2) + canvas.width) % canvas.width,
+          (i * 30) % canvas.height,
+          2, 2
+        );
+      }
+
+      // --- Draw platforms ---
+      ctx.fillStyle = "#654321";
+      for (let p of platforms) {
+        ctx.fillRect(p.x - cameraX, p.y, p.width, p.height);
+      }
+
+      // --- Draw coins ---
+      for (let c of coins) {
+        if (!c.collected) {
+          ctx.beginPath();
+          ctx.arc(c.x - cameraX, c.y, c.r, 0, Math.PI * 2);
+          ctx.fillStyle = "gold";
+          ctx.fill();
+          ctx.strokeStyle = "orange";
+          ctx.stroke();
+        }
+      }
+
+      // --- Draw player ---
+      ctx.fillStyle = "#32cd32";
+      ctx.fillRect(player.x - cameraX, player.y, player.width, player.height);
+
+      // --- Draw score ---
+      ctx.fillStyle = "white";
+      ctx.font = "20px monospace";
+      ctx.fillText("Score: " + score, 20, 40);
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+  </script>
+</body>
+</html>
